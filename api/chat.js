@@ -52,16 +52,11 @@ export default async function handler(req, res) {
     // 4. Inicializar Gemini
     const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-    // Inicializa con tu llave
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // FUERZA el modelo que ya sabes que funciona
-    const GEMINI_MODEL = "gemini-1.5-flash"; // O "gemini-1.5-flash" si prefieres el anterior
-
+    // Usamos el nombre con el prefijo "models/" que es el estándar global
     const model = genAI.getGenerativeModel({ 
-    model: GEMINI_MODEL
-    }, { 
-        apiVersion: 'v1' // <--- ESTO ES LO MÁS IMPORTANTE
+    model: "models/gemini-1.5-flash" 
     });
 
     // 5. Crear el Prompt Maestro
