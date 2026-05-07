@@ -9,10 +9,28 @@ export default async function handler(req, res) {
   const { mensaje, idEmpleado } = req.body;
 
   try {
-    // 1. Configurar Autenticación con Google Drive
+    // 2. Autenticar con Google Drive
+    let credentials;
+    try {
+    // Reemplazamos saltos de línea literales que Vercel pudo haber insertado al pegar
+    const cleanedJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+        .replace(/\n/g, '') // Quita saltos de línea reales
+        .trim();
+        
+    credentials = JSON.parse(cleanedJson);
+    
+    // Ahora arreglamos los \n internos de la llave privada (los que deben estar ahí)
+    if (credentials.private_key) {
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+    } catch (e) {
+    console.error("Error al procesar JSON:", e.message);
+    return res.status(500).json({ error: "Error de formato en credenciales" });
+    }
+
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
     const drive = google.drive({ version: 'v3', auth });
 
