@@ -1,66 +1,57 @@
-// Ejemplo conceptual de la lógica en api/chat.js
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { google } from "googleapis";
 
 export default async function handler(req, res) {
-  // Solo permitimos peticiones POST
-  if (req.method !== 'POST') return res.status(405).send('Método no permitido');
+  // 1. Validar método
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' });
+  }
 
   const { mensaje, idEmpleado } = req.body;
 
   try {
-    // 2. Autenticar con Google Drive
+    // 2. Procesar Credenciales de Google Drive de forma segura
     let credentials;
     try {
-    // Reemplazamos saltos de línea literales que Vercel pudo haber insertado al pegar
-    const cleanedJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-        .replace(/\n/g, '') // Quita saltos de línea reales
+      const cleanedJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+        .replace(/\n/g, '') // Elimina saltos de línea accidentales
         .trim();
-        
-    credentials = JSON.parse(cleanedJson);
-    
-    // Ahora arreglamos los \n internos de la llave privada (los que deben estar ahí)
-    if (credentials.private_key) {
+      
+      credentials = JSON.parse(cleanedJson);
+      
+      if (credentials.private_key) {
         credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-    }
+      }
     } catch (e) {
-    console.error("Error al procesar JSON:", e.message);
-    return res.status(500).json({ error: "Error de formato en credenciales" });
+      console.error("Error en formato de credenciales:", e.message);
+      return res.status(500).json({ error: "Error en el formato del JSON de Google Drive" });
     }
 
+    // 3. Autenticar con Google Drive
     const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
     const drive = google.drive({ version: 'v3', auth });
 
-    // 2. Obtener lista de archivos en tu carpeta
+    // 4. Obtener archivos CSV de la carpeta
     const folderId = '1X2vD-VmTHiKNM8mXEqr23Nni437SucCU';
     const filesRes = await drive.files.list({
       q: `'${folderId}' in parents and trashed = false`,
       fields: 'files(id, name)',
     });
 
-    // 3. Descargar contenido de los CSV y unirlos en un gran texto de contexto
+    // 5. Leer contenido de los archivos para crear el contexto
     let contextoCSV = "SISTEMA DE REFERENCIA (TABLAS ACTUALIZADAS):\n\n";
     
-    for (const file of filesRes.data.files) {
-      const content = await drive.files.get({ fileId: file.id, alt: 'media' });
-      contextoCSV += `--- TABLA: ${file.name} ---\n${content.data}\n\n`;
+    if (filesRes.data.files && filesRes.data.files.length > 0) {
+      for (const file of filesRes.data.files) {
+        const content = await drive.files.get({ fileId: file.id, alt: 'media' });
+        contextoCSV += `--- TABLA: ${file.name} ---\n${content.data}\n\n`;
+      }
     }
 
-    // 4. Inicializar Gemini
-    const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    // Usamos el nombre con el prefijo "models/" que es el estándar global
-    const model = genAI.getGenerativeModel({ 
-    model: "models/gemini-1.5-flash" 
-    });
-
-    // 5. Crear el Prompt Maestro
-    const prompt = `
+    // 6. Configurar el Prompt Maestro
+    const promptMaestro = `
       Eres un asistente de registro agrícola para una empresa.
       
       REGLAS:
@@ -77,13 +68,37 @@ export default async function handler(req, res) {
       ${mensaje}
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    
-    res.status(200).json({ texto: response.text() });
+    // 7. Llamada a Gemini usando Fetch (Método Robusto v1)
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const fetchResponse = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: promptMaestro }]
+        }]
+      })
+    });
+
+    const data = await fetchResponse.json();
+
+    // 8. Manejo de respuesta de Gemini
+    if (data.candidates && data.candidates[0].content) {
+      const respuestaIA = data.candidates[0].content.parts[0].text;
+      return res.status(200).json({ texto: respuestaIA });
+    } else if (data.error) {
+      throw new Error(`Gemini Error: ${data.error.message}`);
+    } else {
+      throw new Error("Respuesta de IA no válida o vacía");
+    }
 
   } catch (error) {
-    console.error("Error en el servidor:", error);
-    res.status(500).json({ error: "Error procesando el registro" });
+    console.error("Error crítico en el servidor:", error);
+    return res.status(500).json({ 
+      error: "Error procesando el registro agrícola",
+      details: error.message 
+    });
   }
 }
