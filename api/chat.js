@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     // FUERZA el modelo que ya sabes que funciona
-    const GEMINI_MODEL = "gemini-2.0-flash"; // O "gemini-1.5-flash" si prefieres el anterior
+    const GEMINI_MODEL = "gemini-1.5-flash"; // O "gemini-1.5-flash" si prefieres el anterior
 
     const model = genAI.getGenerativeModel({ 
     model: GEMINI_MODEL
