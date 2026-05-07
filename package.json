@@ -1,0 +1,10 @@
+{
+  "name": "agente-agricola-ia",
+  "version": "1.0.0",
+  "main": "api/chat.js",
+  "dependencies": {
+    "@google/generative-ai": "^0.1.0",
+    "googleapis": "^126.0.0",
+    "csv-parse": "^5.5.2"
+  }
+}
