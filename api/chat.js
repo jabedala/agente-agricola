@@ -45,9 +45,25 @@ export default async function handler(req, res) {
     
     if (filesRes.data.files && filesRes.data.files.length > 0) {
       for (const file of filesRes.data.files) {
-        const content = await drive.files.get({ fileId: file.id, alt: 'media' });
-        contextoCSV += `--- TABLA: ${file.name} ---\n${content.data}\n\n`;
+        console.log(`Descargando archivo: ${file.name} (ID: ${file.id})`); // LOG DE CONTROL
+        
+        const content = await drive.files.get({ 
+          fileId: file.id, 
+          alt: 'media' 
+        });
+
+        // Aseguramos la conversión a texto
+        const textoArchivo = typeof content.data === 'string' 
+          ? content.data 
+          : JSON.stringify(content.data);
+
+        console.log(`Tamaño del contenido de ${file.name}: ${textoArchivo.length} caracteres`); // LOG DE CONTROL
+        
+        contextoCSV += `--- TABLA: ${file.name} ---\n${textoArchivo}\n\n`;
       }
+    } else {
+      console.log("No se encontraron archivos en la carpeta de Drive.");
+      contextoCSV += "AVISO: No se encontraron archivos en la carpeta configurada.\n";
     }
 
     // 6. Configurar el Prompt Maestro
