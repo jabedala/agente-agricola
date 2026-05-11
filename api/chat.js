@@ -1,49 +1,48 @@
 import mysql from 'mysql2/promise';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
+  // 1. Validar método
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' });
+  }
 
   const { mensaje, idEmpleado } = req.body;
 
   try {
-    // 1. Conexión a MySQL
+    // 2. Conexión a MySQL usando las variables de entorno de Vercel
+    // Asegúrate de haberlas agregado en el panel de Vercel
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
-      port: process.env.DB_PORT || 3306
+      port: parseInt(process.env.DB_PORT) || 3306,
+      connectTimeout: 10000 // 10 segundos de margen
     });
 
-    // 2. Realizar las consultas (Ajusta los nombres de tus tablas)
-    const [rowsPersonas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector = 1');
-    const [rowsParcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector = 1');
-    const [rowsTareas] = await connection.execute('SELECT * FROM Promedios WHERE Sector = 1');
+    // 3. Consultas a tus tablas (Ajusta los nombres si son diferentes)
+    const [rowsPersonas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
+    const [rowsParcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
+    
+    // Cerramos la conexión inmediatamente después de obtener los datos
+    await connection.end();
 
-    await connection.end(); // Cerramos la conexión
-
-    // 3. Convertir los resultados a un String legible para Gemini
-    // Usamos JSON.stringify para que la IA entienda la estructura de filas y columnas
-    let contextoDB = "SISTEMA DE REFERENCIA (BASE DE DATOS EN VIVO):\n\n";
+    // 4. Convertir datos a texto para Gemini
+    let contextoDB = "SISTEMA DE REFERENCIA AGRÍCOLA (SQL):\n\n";
     contextoDB += "TABLA PERSONAS:\n" + JSON.stringify(rowsPersonas) + "\n\n";
     contextoDB += "TABLA PARCELAS:\n" + JSON.stringify(rowsParcelas) + "\n\n";
-    contextoDB += "TABLA TAREAS:\n" + JSON.stringify(rowsTareas) + "\n\n";
 
-    // 4. Prompt Maestro
+    // 5. El Prompt Maestro
     const promptMaestro = `
       Eres un asistente de registro agrícola.
-      REGLAS:
-      1. Usa los datos de la base de datos para validar.
-      2. Si el usuario es ID: ${idEmpleado}, verifica sus permisos en la tabla Personas.
-      
-      DATOS DE LA BASE DE DATOS:
+      Usa la siguiente información de la base de datos para responder y validar:
       ${contextoDB}
 
-      MENSAJE DEL USUARIO:
-      ${mensaje}
+      Usuario actual: ID ${idEmpleado}
+      Mensaje del usuario: ${mensaje}
     `;
 
-    // 5. Llamada a Gemini (el método fetch que ya nos funciona)
+    // 6. Llamada a Gemini (usando fetch directo)
     const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
     const fetchResponse = await fetch(url, {
@@ -55,12 +54,19 @@ export default async function handler(req, res) {
     });
 
     const data = await fetchResponse.json();
-    const respuestaIA = data.candidates[0].content.parts[0].text;
 
-    return res.status(200).json({ texto: respuestaIA });
+    if (data.candidates && data.candidates[0].content) {
+      const respuestaIA = data.candidates[0].content.parts[0].text;
+      return res.status(200).json({ texto: respuestaIA });
+    } else {
+      throw new Error(data.error?.message || "Error en la respuesta de Gemini");
+    }
 
   } catch (error) {
-    console.error("Error en MySQL o Gemini:", error);
-    return res.status(500).json({ error: "Error de conexión con los datos agrícolas", details: error.message });
+    console.error("Error detallado:", error);
+    return res.status(500).json({ 
+      error: "Error de conexión o consulta", 
+      details: error.message 
+    });
   }
 }
