@@ -2,137 +2,141 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agente Agrícola IA</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Agente de Registros Agrícolas</title>
     <style>
-        .chat-container { height: calc(100vh - 160px); }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; }
+        #chat-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        #chat { border: 1px solid #eee; padding: 10px; height: 400px; overflow-y: auto; background: #fafafa; margin-bottom: 10px; }
+        .msg { margin: 10px 0; padding: 8px; border-radius: 5px; max-width: 80%; }
+        .user { color: #fff; background-color: #007bff; align-self: flex-end; margin-left: auto; }
+        .bot { color: #333; background-color: #e9e9eb; }
+        textarea { width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 10px; box-sizing: border-box; resize: none; }
+        .controls { display: flex; gap: 5px; margin-top: 5px; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; background: #28a745; color: white; }
+        
+        /* Modal de Login */
+        #login-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .login-box { background: white; padding: 30px; border-radius: 8px; text-align: center; width: 300px; }
+        .login-box input { width: 100%; margin: 10px 0; padding: 10px; box-sizing: border-box; }
     </style>
 </head>
-<body class="bg-slate-50 font-sans">
+<body>
 
-    <div id="login-screen" class="fixed inset-0 bg-green-800 z-50 flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center">
-            <div class="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <i class="fas fa-tractor text-3xl text-green-700"></i>
-            </div>
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">Bienvenido</h1>
-            <p class="text-gray-500 mb-6">Ingresa tu número de empleado para comenzar el registro.</p>
-            <input type="number" id="emp-id" placeholder="ID de Empleado" 
-                   class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 mb-4 focus:border-green-500 outline-none transition-all">
-            <button onclick="login()" class="w-full bg-green-700 text-white font-bold py-3 rounded-xl hover:bg-green-800 transition-all">
-                Ingresar al Sistema
-            </button>
-        </div>
+<div id="login-modal">
+    <div class="login-box">
+        <h3>Iniciar Sesión</h3>
+        <input type="text" id="user" placeholder="Usuario">
+        <input type="password" id="pass" placeholder="Contraseña">
+        <button onclick="login()">Ingresar</button>
+        <p id="login-error" style="color:red; font-size:12px; display:none;">Credenciales inválidas</p>
     </div>
+</div>
 
-    <div id="main-app" class="hidden flex flex-col h-screen">
-        <header class="bg-white border-b p-4 flex justify-between items-center shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="bg-green-600 p-2 rounded-lg text-white">
-                    <i class="fas fa-robot"></i>
-                </div>
-                <div>
-                    <h2 class="font-bold text-gray-800">Asistente IA</h2>
-                    <p id="user-display" class="text-[10px] text-green-600 font-bold uppercase"></p>
-                </div>
-            </div>
-            <button onclick="location.reload()" class="text-gray-400 hover:text-red-500">
-                <i class="fas fa-sign-out-alt"></i>
-            </button>
-        </header>
-
-        <main id="chat-window" class="chat-container overflow-y-auto p-4 space-y-4 flex-1">
-            <div class="flex justify-start">
-                <div class="bg-white border p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
-                    <p class="text-sm text-gray-700">Hola. Estoy listo para tomar tus registros de hoy. ¿Qué tarea realizaste o en qué parcela estuviste?</p>
-                </div>
-            </div>
-        </main>
-
-        <div id="loading" class="hidden px-6 py-2 text-xs text-gray-400 italic">
-            <i class="fas fa-circle-notch animate-spin mr-1"></i> La IA está analizando las tablas...
-        </div>
-
-        <footer class="p-4 bg-white border-t">
-            <form id="chat-form" class="max-w-4xl mx-auto flex gap-2">
-                <input type="text" id="user-input" autocomplete="off"
-                       placeholder="Escribe tu registro aquí..." 
-                       class="flex-1 bg-gray-100 border-none rounded-full px-5 py-3 text-sm focus:ring-2 focus:ring-green-500 outline-none">
-                <button type="submit" class="bg-green-700 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-green-800 shadow-lg transition-transform active:scale-90">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </form>
-        </footer>
+<div id="chat-container">
+    <h2>Agente Agrícola</h2>
+    <div id="chat"></div>
+    <textarea id="input" rows="3" placeholder="Escribe tu registro aquí..."></textarea>
+    <div class="controls">
+        <button id="send">Enviar</button>
+        <button id="mic">🎤 Voz</button>
     </div>
+</div>
 
-    <script>
-        let currentUserId = "";
+<script>
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const micBtn = document.getElementById("mic");
 
-        function login() {
-            const idInput = document.getElementById('emp-id');
-            if (idInput.value.trim() === "") return alert("Por favor ingresa tu ID");
-            
-            currentUserId = idInput.value;
-            document.getElementById('user-display').innerText = "Empleado ID: " + currentUserId;
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('main-app').classList.remove('hidden');
-        }
+let idEmpleado = null;
+let nombreEmpleado = "";
+let history = []; // Para memoria del chat
 
-        const chatForm = document.getElementById('chat-form');
-        const chatWindow = document.getElementById('chat-window');
-        const userInput = document.getElementById('user-input');
-        const loading = document.getElementById('loading');
+async function login() {
+    const username = document.getElementById("user").value;
+    const password = document.getElementById("pass").value;
+    const errorMsg = document.getElementById("login-error");
 
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const mensaje = userInput.value.trim();
-            if (!mensaje) return;
-
-            // 1. Agregar mensaje del usuario a la pantalla
-            appendMessage('user', mensaje);
-            userInput.value = "";
-            loading.classList.remove('hidden');
-
-            try {
-                // 2. Llamada a la API en Vercel
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        mensaje: mensaje,
-                        idEmpleado: currentUserId
-                    })
-                });
-
-                const data = await response.json();
-                
-                // 3. Mostrar respuesta de la IA
-                appendMessage('ai', data.texto || "Lo siento, hubo un error al procesar.");
-            } catch (error) {
-                appendMessage('ai', "Error de conexión con el servidor.");
-            } finally {
-                loading.classList.add('hidden');
-            }
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login', username, password })
         });
+        const data = await res.json();
 
-        function appendMessage(role, text) {
-            const wrapper = document.createElement('div');
-            wrapper.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-            
-            const content = `
-                <div class="${role === 'user' ? 'bg-green-700 text-white rounded-tr-none' : 'bg-white border text-gray-700 rounded-tl-none'} p-3 rounded-2xl shadow-sm max-w-[85%] text-sm">
-                    ${text.replace(/\n/g, '<br>')}
-                </div>
-            `;
-            
-            wrapper.innerHTML = content;
-            chatWindow.appendChild(wrapper);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
+        if (data.success) {
+            idEmpleado = data.user.id;
+            nombreEmpleado = data.user.nombre;
+            document.getElementById("login-modal").style.display = "none";
+            addMsg(`¡Hola ${nombreEmpleado}! Soy tu asistente. ¿Qué tarea quieres registrar hoy?`, "bot");
+        } else {
+            errorMsg.style.display = "block";
         }
-    </script>
+    } catch (err) {
+        alert("Error de conexión con el servidor");
+    }
+}
+
+function addMsg(text, sender) {
+    let div = document.createElement("div");
+    div.className = "msg " + sender;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+async function procesarMensaje(text) {
+    addMsg(text, "user");
+    input.value = "";
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                mensaje: text, 
+                idEmpleado: idEmpleado,
+                history: history 
+            })
+        });
+        const data = await res.json();
+        
+        if (data.texto) {
+            addMsg(data.texto, "bot");
+            speak(data.texto);
+            history.push({ role: "user", content: text });
+            history.push({ role: "bot", content: data.texto });
+        }
+    } catch (err) {
+        addMsg("❌ Error conectando con la IA.", "bot");
+    }
+}
+
+function speak(text) {
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES';
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
+sendBtn.onclick = () => {
+    let text = input.value.trim();
+    if (text) procesarMensaje(text);
+};
+
+micBtn.onclick = () => {
+    let SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Navegador no compatible");
+    let recog = new SpeechRecognition();
+    recog.lang = "es-ES";
+    recog.start();
+    recog.onresult = (e) => procesarMensaje(e.results[0][0].transcript);
+};
+</script>
 </body>
 </html>
