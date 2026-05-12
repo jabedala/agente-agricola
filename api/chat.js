@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     const promptMaestro = `
       Eres un asistente de registro agrícola. 
       REGLAS:
-      1. Usa los DATOS DEL SECTOR 1 proporcionados para validar nombres y lugares.
+      1. Usa los DATOS DEL SECTOR  para validar nombres y lugares.
       2. El usuario actual tiene el ID: ${idEmpleado}.
       3. Si el usuario intenta registrar algo, valida que el trabajo y la parcela existan en los datos.
 
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       ${mensaje}
     `;
 
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
     const fetchResponse = await fetch(url, {
       method: 'POST',
