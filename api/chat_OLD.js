@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 
+/*
 export default async function handler(req, res) {
   // 1. Validar método
   if (req.method !== 'POST') {
@@ -65,6 +66,7 @@ export default async function handler(req, res) {
       console.log("No se encontraron archivos en la carpeta de Drive.");
       contextoCSV += "AVISO: No se encontraron archivos en la carpeta configurada.\n";
     }
+    
 
     // 6. Configurar el Prompt Maestro
     const promptMaestro = `
@@ -118,3 +120,4 @@ export default async function handler(req, res) {
     });
   }
 }
+*/

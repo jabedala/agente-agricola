@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     `;
 
     // 6. Llamada a Gemini (usando fetch directo)
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
     const fetchResponse = await fetch(url, {
       method: 'POST',
