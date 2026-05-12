@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     if (action === 'login') {
       // Ajusta 'Usuarios' y los nombres de columna según tu base de datos
       const [userRows] = await connection.execute(
-        'SELECT id, nombre FROM Personas WHERE username = ? AND password = ?',
+        'SELECT usuario, nombre FROM usuarios WHERE usuario = ? AND pass = ?',
         [username, password]
       );
       await connection.end();
