@@ -54,12 +54,23 @@ const micBtn = document.getElementById("mic");
 let idEmpleado = null;
 let nombreEmpleado = "";
 let sectorEmpleado = "";
-let history = []; // Para memoria del chat
+let history = []; 
+let isProcessing = false; // Nueva bandera de control
+
+// Permitir enviar con la tecla Enter
+input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+    }
+});
 
 async function login() {
     const username = document.getElementById("user").value;
     const password = document.getElementById("pass").value;
     const errorMsg = document.getElementById("login-error");
+
+    if(!username || !password) return;
 
     try {
         const res = await fetch('/api/chat', {
@@ -74,9 +85,10 @@ async function login() {
             nombreEmpleado = data.user.Nombre;
             sectorEmpleado = data.user.Sector;
             document.getElementById("login-modal").style.display = "none";
-            addMsg(`¡Hola ${nombreEmpleado}! Soy tu asistente. ¿Qué tarea quieres registrar hoy?`, "bot");
+            addMsg(`¡Hola ${nombreEmpleado}! Soy tu asistente del Sector ${sectorEmpleado}. ¿Qué tarea quieres registrar hoy?`, "bot");
         } else {
             errorMsg.style.display = "block";
+            errorMsg.textContent = "Credenciales incorrectas";
         }
     } catch (err) {
         alert("Error de conexión con el servidor");
@@ -92,8 +104,13 @@ function addMsg(text, sender) {
 }
 
 async function procesarMensaje(text) {
+    if (isProcessing) return; // Evitar múltiples envíos
+    
     addMsg(text, "user");
     input.value = "";
+    isProcessing = true;
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = "0.5";
 
     try {
         const res = await fetch('/api/chat', {
@@ -110,18 +127,28 @@ async function procesarMensaje(text) {
         if (data.texto) {
             addMsg(data.texto, "bot");
             speak(data.texto);
-            history.push({ role: "user", content: text });
-            history.push({ role: "bot", content: data.texto });
+            // Guardamos en el historial para contexto (opcional según el backend)
+            history.push({ role: "user", parts: [{ text: text }] });
+            history.push({ role: "model", parts: [{ text: data.texto }] });
+        } else {
+            addMsg("⚠️ La IA no devolvió una respuesta clara.", "bot");
         }
     } catch (err) {
         addMsg("❌ Error conectando con la IA.", "bot");
+    } finally {
+        isProcessing = false;
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = "1";
     }
 }
 
 function speak(text) {
     if ('speechSynthesis' in window) {
+        // Cancelar cualquier audio previo para que no se amontonen
+        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-ES';
+        utterance.rate = 1.0; // Velocidad normal
         window.speechSynthesis.speak(utterance);
     }
 }
@@ -133,11 +160,22 @@ sendBtn.onclick = () => {
 
 micBtn.onclick = () => {
     let SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Navegador no compatible");
+    if (!SpeechRecognition) return alert("Navegador no compatible con dictado");
+    
     let recog = new SpeechRecognition();
     recog.lang = "es-ES";
     recog.start();
-    recog.onresult = (e) => procesarMensaje(e.results[0][0].transcript);
+    
+    micBtn.style.backgroundColor = "#ff4444"; // Visual de que está escuchando
+    
+    recog.onresult = (e) => {
+        let text = e.results[0][0].transcript;
+        procesarMensaje(text);
+    };
+    
+    recog.onend = () => {
+        micBtn.style.backgroundColor = "#28a745";
+    };
 };
 </script>
 </body>

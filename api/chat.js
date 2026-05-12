@@ -14,9 +14,8 @@ export default async function handler(req, res) {
       port: parseInt(process.env.DB_PORT) || 3306
     });
 
-    // --- NUEVA LÓGICA DE LOGIN ---
+    // --- LÓGICA DE LOGIN ---
     if (action === 'login') {
-      // Ajusta 'Usuarios' y los nombres de columna según tu base de datos
       const [userRows] = await connection.execute(
         'SELECT id, Nombre, Sector FROM ParaAgentePersonas WHERE id = ? AND pass = ?',
         [username, password]
@@ -30,18 +29,36 @@ export default async function handler(req, res) {
       }
     }
 
-    // --- LÓGICA DEL CHAT (Ya existente) ---
+    // --- LÓGICA DEL CHAT ---
     const [rowsPersonas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
     const [rowsParcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
     const [rowsPromedios] = await connection.execute('SELECT * FROM ParaAgentePromedios WHERE Sector=1');
     const [rowsTrabajos] = await connection.execute('SELECT * FROM ParaAgenteTrabajos');
-   
+    
     await connection.end();
 
-    let contextoDB = "SISTEMA DE REFERENCIA AGRÍCOLA (SQL):\n" + JSON.stringify(rowsPersonas) + 
-                      JSON.stringify(rowsParcelas) + JSON.stringify(rowsPromedios) + JSON.stringify(rowsTrabajos);
+    // Separamos las tablas con títulos claros para que Gemini no se confunda
+    let contextoDB = `
+      DATOS DEL SECTOR 1:
+      - EMPLEADOS: ${JSON.stringify(rowsPersonas)}
+      - PARCELAS: ${JSON.stringify(rowsParcelas)}
+      - PROMEDIOS: ${JSON.stringify(rowsPromedios)}
+      - CATÁLOGO DE TRABAJOS: ${JSON.stringify(rowsTrabajos)}
+    `;
 
-    const promptMaestro = `Eres un asistente agrícola. Contexto: ${contextoDB}. Usuario ID: ${idEmpleado}. Mensaje: ${mensaje}`;
+    const promptMaestro = `
+      Eres un asistente de registro agrícola. 
+      REGLAS:
+      1. Usa los DATOS DEL SECTOR 1 proporcionados para validar nombres y lugares.
+      2. El usuario actual tiene el ID: ${idEmpleado}.
+      3. Si el usuario intenta registrar algo, valida que el trabajo y la parcela existan en los datos.
+
+      CONTEXTO:
+      ${contextoDB}
+
+      MENSAJE DEL USUARIO:
+      ${mensaje}
+    `;
 
     const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
@@ -52,12 +69,18 @@ export default async function handler(req, res) {
     });
 
     const data = await fetchResponse.json();
-    const respuestaIA = data.candidates[0].content.parts[0].text;
 
-    return res.status(200).json({ texto: respuestaIA });
+    // Validación de seguridad para la respuesta de Gemini
+    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+      const respuestaIA = data.candidates[0].content.parts[0].text;
+      return res.status(200).json({ texto: respuestaIA });
+    } else {
+      console.error("Respuesta fallida de Gemini:", data);
+      return res.status(500).json({ error: "La IA no pudo procesar el mensaje", details: data });
+    }
 
   } catch (error) {
-    console.error(error);
+    console.error("Error en el servidor:", error);
     return res.status(500).json({ error: error.message });
   }
 }
