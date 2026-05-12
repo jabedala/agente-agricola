@@ -53,6 +53,7 @@ const micBtn = document.getElementById("mic");
 
 let idEmpleado = null;
 let nombreEmpleado = "";
+let sectorEmpleado = "";
 let history = []; // Para memoria del chat
 
 async function login() {
@@ -70,7 +71,8 @@ async function login() {
 
         if (data.success) {
             idEmpleado = data.user.id;
-            nombreEmpleado = data.user.nombre;
+            nombreEmpleado = data.user.Nombre;
+            sectorEmpleado = data.user.Sector;
             document.getElementById("login-modal").style.display = "none";
             addMsg(`¡Hola ${nombreEmpleado}! Soy tu asistente. ¿Qué tarea quieres registrar hoy?`, "bot");
         } else {
