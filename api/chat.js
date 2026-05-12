@@ -31,11 +31,15 @@ export default async function handler(req, res) {
     }
 
     // --- LÓGICA DEL CHAT (Ya existente) ---
-    const [rowsPersonas] = await connection.execute('SELECT * FROM Personas');
-    const [rowsParcelas] = await connection.execute('SELECT * FROM Parcelas');
+    const [rowsPersonas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
+    const [rowsParcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
+    const [rowsPromedios] = await connection.execute('SELECT * FROM ParaAgentePromedios WHERE Sector=1');
+    const [rowsTrabajos] = await connection.execute('SELECT * FROM ParaAgenteTrabajos');
+   
     await connection.end();
 
-    let contextoDB = "SISTEMA DE REFERENCIA AGRÍCOLA (SQL):\n" + JSON.stringify(rowsPersonas) + JSON.stringify(rowsParcelas);
+    let contextoDB = "SISTEMA DE REFERENCIA AGRÍCOLA (SQL):\n" + JSON.stringify(rowsPersonas) + 
+                      JSON.stringify(rowsParcelas) + JSON.stringify(rowsPromedios) + JSON.stringify(rowsTrabajos);
 
     const promptMaestro = `Eres un asistente agrícola. Contexto: ${contextoDB}. Usuario ID: ${idEmpleado}. Mensaje: ${mensaje}`;
 
