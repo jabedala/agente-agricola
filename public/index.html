@@ -119,21 +119,35 @@ async function procesarMensaje(text) {
             body: JSON.stringify({ 
                 mensaje: text, 
                 idEmpleado: idEmpleado,
-                history: history 
+                history: history // Enviamos el array simple
             })
         });
         const data = await res.json();
         
         if (data.texto) {
             addMsg(data.texto, "bot");
-            speak(data.texto);
-            // Guardamos en el historial para contexto (opcional según el backend)
-            history.push({ role: "user", parts: [{ text: text }] });
-            history.push({ role: "model", parts: [{ text: data.texto }] });
+            
+            // MEJORA DE VOZ: Limpiamos los bloques JSON antes de hablar para que no deletree código
+            let textoParaVoz = data.texto.replace(/\[\[REGISTRO_.*?\]\]/g, '').trim();
+            if (textoParaVoz) {
+                speak(textoParaVoz);
+            }
+
+            // ACCIÓN FUTURA: Si la IA mandó un JSON válido, aquí es donde lo detectamos
+            if (data.texto.includes('[[REGISTRO_TRABAJO:')) {
+                console.log("¡Detectado JSON de inserción de trabajo listo para la BD!");
+                // Aquí llamarás a tu función para insertar en la base de datos
+                // Y cuando la inserción sea exitosa, limpias la memoria: history = [];
+            }
+
+            // CORRECCIÓN DE HISTORIAL: Formato plano, directo y fácil de leer para el prompt del backend
+            history.push({ usuario: text, asistente: data.texto });
+            
         } else {
             addMsg("⚠️ La IA no devolvió una respuesta clara.", "bot");
         }
     } catch (err) {
+        console.error("Error en la petición de chat:", err);
         addMsg("❌ Error conectando con la IA.", "bot");
     } finally {
         isProcessing = false;
