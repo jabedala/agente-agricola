@@ -118,9 +118,9 @@ export default async function handler(req, res) {
     let reglasNegocio = "";
 
     if (intencion === 'TRABAJO') {
-      const [personas] = await connection.execute('SELECT id, Nombre FROM ParaAgentePersonas WHERE Sector=1');
-      const [parcelas] = await connection.execute('SELECT id, Nombre FROM ParaAgenteParcelas WHERE Sector=1');
-      const [trabajos] = await connection.execute('SELECT id, Nombre FROM ParaAgenteTrabajos');
+      const [personas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
+      const [parcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
+      const [trabajos] = await connection.execute('SELECT * FROM ParaAgenteTrabajos');
       
       contextoDB = `EMPLEADOS: ${JSON.stringify(personas)}\nPARCELAS: ${JSON.stringify(parcelas)}\nTRABAJOS: ${JSON.stringify(trabajos)}`;
       reglasNegocio = "Tu objetivo es registrar tareas agrícolas. Cuando termines, genera el JSON con formato [[REGISTRO_TRABAJO:{...}]]";
