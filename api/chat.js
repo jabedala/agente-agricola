@@ -102,6 +102,15 @@ export default async function handler(req, res) {
     const routerData = await routerResponse.json();
     const intencion = routerData.candidates[0].content.parts[0].text.trim().toUpperCase();
 
+    // Si Gemini responde algo largo como "LA INTENCION ES TRABAJO", buscamos la palabra clave dentro
+    if (intencion.includes('TRABAJO')) intencion = 'TRABAJO';
+    else if (intencion.includes('ASISTENCIA')) intencion = 'ASISTENCIA';
+    else if (intencion.includes('MONITOREO')) intencion = 'MONITOREO';
+    else if (intencion.includes('CONSULTA')) intencion = 'CONSULTA';
+    else intencion = 'TRABAJO'; // Por defecto, si se confunde, asumimos que es un trabajo
+
+    console.log(`[ROUTER LOG] Intención detectada: "${intencion}" para el mensaje: "${mensaje}"`);
+
     // ==========================================
     // PASO 2: CARGA DINÁMICA DE CONTEXTO SQL
     // ==========================================
