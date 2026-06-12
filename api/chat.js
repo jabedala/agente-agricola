@@ -85,123 +85,102 @@ export default async function handler(req, res) {
     // ==========================================
     // PASO 1: EL ROUTER DE INTENCIONES
     // ==========================================
+    // ==========================================
+    // PASO 1: EL ROUTER DE INTENCIONES (CON GEMINI)
+    // ==========================================
     const urlGemini = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
     const promptRouter = `
       Analiza el mensaje del usuario y clasifícalo en una de estas 4 intenciones. 
-      Responde ÚNICAMENTE con la palabra clave: 'TRABAJO', 'ASISTENCIA', 'MONITOREO' o 'CONSULTA'.
+      Responde ÚNICAMENTE con una de estas palabras clave, sin puntos, sin saludos y sin texto extra: 'TRABAJO', 'ASISTENCIA', 'MONITOREO' o 'CONSULTA'.
 
       Mensaje: "${mensaje}"
       Intención:`;
 
-    const routerResponse = await fetch(urlGemini, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: promptRouter }] }] })
-    });
-    const routerData = await routerResponse.json();
-    const intencion = routerData.candidates[0].content.parts[0].text.trim().toUpperCase();
+    let intencion = 'TRABAJO'; // Valor por defecto en caso de fallo
 
-    // Si Gemini responde algo largo como "LA INTENCION ES TRABAJO", buscamos la palabra clave dentro
-    if (intencion.includes('TRABAJO')) intencion = 'TRABAJO';
-    else if (intencion.includes('ASISTENCIA')) intencion = 'ASISTENCIA';
-    else if (intencion.includes('MONITOREO')) intencion = 'MONITOREO';
-    else if (intencion.includes('CONSULTA')) intencion = 'CONSULTA';
-    else intencion = 'TRABAJO'; // Por defecto, si se confunde, asumimos que es un trabajo
+    try {
+      const routerResponse = await fetch(urlGemini, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptRouter }] }] })
+      });
+      
+      const routerData = await routerResponse.json();
 
-    console.log(`[ROUTER LOG] Intención detectada: "${intencion}" para el mensaje: "${mensaje}"`);
+      // Validamos rigurosamente que la respuesta de Gemini traiga estructura válida
+      if (routerData.candidates && routerData.candidates.length > 0 && routerData.candidates[0].content) {
+        let textoRouter = routerData.candidates[0].content.parts[0].text.trim().toUpperCase();
+        
+        if (textoRouter.includes('TRABAJO')) intencion = 'TRABAJO';
+        else if (textoRouter.includes('ASISTENCIA')) intencion = 'ASISTENCIA';
+        else if (textoRouter.includes('MONITOREO')) intencion = 'MONITOREO';
+        else if (textoRouter.includes('CONSULTA')) intencion = 'CONSULTA';
+      } else {
+        console.warn("[ROUTER WARN] Gemini no devolvió candidatos válidos para la intención. Usando respaldo por código.");
+        // Respaldo rápido por código por si la IA parpadea
+        const m = mensaje.toLowerCase();
+        if (m.includes('entré') || m.includes('salí') || m.includes('asistencia')) intencion = 'ASISTENCIA';
+        else if (m.includes('plaga') || m.includes('monitoreo')) intencion = 'MONITOREO';
+        else if (m.includes('cuánto') || m.includes('ayer') || m.includes('semana')) intencion = 'CONSULTA';
+      }
+    } catch (routerError) {
+      console.error("[ROUTER ERROR] Falló la llamada de clasificación a Gemini:", routerError.message);
+    }
+
+    // AHORA SÍ verás esta línea pase lo que pase, porque el flujo está protegido
+    console.log(`[ROUTER LOG] Intención definitiva: "${intencion}" para el mensaje: "${mensaje}"`);
+
 
     // ==========================================
-    // PASO 2: CARGA DINÁMICA DE CONTEXTO SQL
+    // PASO 2: CARGA DINÁMICA DE TABLAS SEGÚN INTENCIÓN
     // ==========================================
     let contextoDB = "";
     let reglasNegocio = "";
 
+    const [empleadoActual] = await connection.execute('SELECT Nombre, Tipo FROM ParaAgentePersonas WHERE id = ?', [idEmpleado]);
+    const esEncargado = empleadoActual[0]?.Tipo === 'M';
+
     if (intencion === 'TRABAJO') {
-      const [personas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
-      const [parcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
-      const [trabajos] = await connection.execute('SELECT * FROM ParaAgenteTrabajos');
+      const [personas] = await connection.execute('SELECT id, Nombre FROM ParaAgentePersonas WHERE Sector=1');
+      const [parcelas] = await connection.execute('SELECT id, Nombre FROM ParaAgenteParcelas WHERE Sector=1');
+      const [promedios] = await connection.execute('SELECT * FROM ParaAgentePromedios WHERE Sector=1');
+      const [trabajos] = await connection.execute('SELECT id, Nombre FROM ParaAgenteTrabajos');
       
-      contextoDB = `EMPLEADOS: ${JSON.stringify(personas)}\nPARCELAS: ${JSON.stringify(parcelas)}\nTRABAJOS: ${JSON.stringify(trabajos)}`;
-      reglasNegocio = "Tu objetivo es registrar tareas agrícolas. Cuando termines, genera el JSON con formato [[REGISTRO_TRABAJO:{...}]]";
+      contextoDB = `EMPLEADOS DEL SECTOR: ${JSON.stringify(personas)}\nPARCELAS: ${JSON.stringify(parcelas)}\nTRABAJOS DISPONIBLES: ${JSON.stringify(trabajos)}\nPROMEDIOS ESPERADOS: ${JSON.stringify(promedios)}`;
+      reglasNegocio = `Tu objetivo es registrar labores agrícolas. El usuario actual es ${empleadoActual[0]?.Nombre}. PERMISOS: ${esEncargado ? 'Es ENCARGADO (M), puede registrar para cualquiera.' : 'Es OPERARIO, SOLO puede registrar para sí mismo.'} Cuando todos los datos estén claros (quién, dónde, qué trabajo y cantidad), genera un bloque JSON al final con el formato exacto: [[REGISTRO_TRABAJO:{"id_persona":X,"id_parcela":Y,"id_trabajo":Z,"cantidad":N}]]`;
 
     } else if (intencion === 'ASISTENCIA') {
-      // Para asistencia solo necesitamos saber quién es el empleado actual
-      const [empleado] = await connection.execute('SELECT id, Nombre FROM ParaAgentePersonas WHERE id = ?', [idEmpleado]);
-      
-      contextoDB = `EMPLEADO_ACTUAL: ${JSON.stringify(empleado)}`;
-      reglasNegocio = "Tu objetivo es registrar la entrada o salida (marca de reloj) del empleado. Pregunta si es Entrada o Salida si no lo detalla. Al finalizar, genera el JSON: [[REGISTRO_ASISTENCIA:{\"id_persona\":X, \"tipo\":\"ENTRADA\" o \"SALIDA\"}]]";
+      contextoDB = `EMPLEADO ACTUAL: ${JSON.stringify(empleadoActual[0])}`;
+      reglasNegocio = `Registra marcas de entrada o salida. Pregunta si falta definir el tipo. Al finalizar genera: [[REGISTRO_ASISTENCIA:{"id_persona":${idEmpleado},"tipo":"ENTRADA" o "SALIDA"}]]`;
 
     } else if (intencion === 'MONITOREO') {
-      const [plagas] = await connection.execute('SELECT id, NombreComun FROM ParaAgentePlagas');
       const [parcelas] = await connection.execute('SELECT id, Nombre FROM ParaAgenteParcelas WHERE Sector=1');
-      
-      contextoDB = `PLAGAS: ${JSON.stringify(plagas)}\nPARCELAS: ${JSON.stringify(parcelas)}`;
-      reglasNegocio = "Tu objetivo es registrar monitoreos de plagas o estado de cultivo. Al finalizar, genera el JSON: [[REGISTRO_MONITOREO:{...}]]";
+      contextoDB = `PARCELAS: ${JSON.stringify(parcelas)}`;
+      reglasNegocio = `Ayuda a registrar evaluaciones de plagas o cultivos. Al finalizar genera: [[REGISTRO_MONITOREO:{"id_parcela":X,"detalle":"..."}]]`;
 
     } else { // CONSULTA
-      // 1. Preguntamos rápido a Gemini qué tipo de consulta es
-      const promptSubRouter = `
-        Analiza el mensaje de consulta del usuario y clasifícalo en una de estas 3 sub-intenciones.
-        Responde ÚNICAMENTE con la palabra clave: 'PROCEDIMIENTO', 'ASISTENCIA_HISTORICA' o 'TRABAJOS_SEMANA'.
-
-        Mensaje: "${mensaje}"
-        Sub-intención:`;
-
-      const subRouterResponse = await fetch(urlGemini, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: promptSubRouter }] }] })
-      });
-      const subRouterData = await subRouterResponse.json();
-      const subIntencion = subRouterData.candidates[0].content.parts[0].text.trim().toUpperCase();
-
-      // 2. Ejecutamos el SQL específico según la sub-intención
-      if (subIntencion === 'PROCEDIMIENTO') {
-        // Traemos de la base de datos el manual o procedimiento que menciona el usuario
-        // Por ejemplo, una tabla donde guardes texto de capacitaciones o protocolos
-        const [procedimientos] = await connection.execute(
-          'SELECT titulo, descripcion FROM ParaAgenteProcedamientos WHERE ? LIKE CONCAT("%", palabra_clave, "%") LIMIT 3', 
-          [mensaje]
-        );
-        contextoDB = `MANUALES_Y_PROCEDIMIENTOS: ${JSON.stringify(procedimientos)}`;
-        reglasNegocio = "El usuario quiere saber cómo se hace una tarea. Explícale el procedimiento usando los manuales proporcionados.";
-
-      } else if (subIntencion === 'ASISTENCIA_HISTORICA') {
-        // Traemos las marcas de ayer o días recientes del empleado logueado
-        const [marcas] = await connection.execute(
-          'SELECT fecha, hora, tipo FROM ParaAgenteMarcas WHERE id_persona = ? ORDER BY fecha DESC, hora DESC LIMIT 10',
-          [idEmpleado]
-        );
-        contextoDB = `HISTORIAL_DE_ASISTENCIA_EMPLEADO: ${JSON.stringify(marcas)}`;
-        reglasNegocio = "El usuario está consultando sus marcas de entrada/salida recientes. Respóndele detallando sus horarios.";
-
-      } else if (subIntencion === 'TRABAJOS_SEMANA') {
-        // Traemos los trabajos registrados en los últimos 7 días
-        const [trabajosSemanales] = await connection.execute(
-          'SELECT fecha, id_parcela, cantidad FROM ParaAgenteRegistroTrabajos WHERE id_persona = ? AND fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)',
-          [idEmpleado]
-        );
-        contextoDB = `TRABAJOS_REGISTRADOS_ESTA_SEMANA: ${JSON.stringify(trabajosSemanales)}`;
-        reglasNegocio = "El usuario quiere ver qué ha registrado esta semana. Súmale las cantidades por parcela si es necesario y dale un resumen.";
-      }
+      const [proc] = await connection.execute('SELECT * FROM ParaAgenteTrabajos'); 
+      contextoDB = `CATÁLOGO DE TRABAJOS: ${JSON.stringify(proc)}`;
+      reglasNegocio = "El usuario consulta información o procedimientos. Explica basándote en los datos.";
     }
 
-    await connection.end(); // Cerramos la conexión SQL
+    await connection.end();
+
 
     // ==========================================
-    // PASO 3: RESPUESTA FINAL CON MEMORIA
+    // PASO 3: LLAMADA FINAL A GEMINI CON CONTEXTO Y MEMORIA
     // ==========================================
     const promptMaestro = `
       ${reglasNegocio}
       
-      DATOS DE REFERENCIA EXCLUSIVOS PARA ESTA CONVERSACIÓN:
+      DATOS DE LA BASE DE DATOS PARA ESTA SITUACIÓN:
       ${contextoDB}
 
-      HISTORIAL DE ESTA SESIÓN (Mantén el hilo hasta lograr el objetivo):
-      ${JSON.stringify(history)}
+      HISTORIAL DE LA SESIÓN:
+      ${JSON.stringify(history || [])}
 
-      NUEVO MENSAJE DEL USUARIO:
+      MENSAJE ACTUAL DEL USUARIO:
       ${mensaje}
     `;
 
@@ -212,9 +191,14 @@ export default async function handler(req, res) {
     });
 
     const data = await fetchResponse.json();
-    const respuestaIA = data.candidates[0].content.parts[0].text;
 
-    return res.status(200).json({ texto: respuestaIA });
+    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+      const respuestaIA = data.candidates[0].content.parts[0].text;
+      return res.status(200).json({ texto: respuestaIA });
+    } else {
+      console.error("Gemini final falló:", data);
+      return res.status(200).json({ texto: "Hola, pude entender tu intención pero el motor de respuesta está experimentando alta demanda. ¿Podrías intentar enviarme el mensaje nuevamente?" });
+    }
 
 
   } catch (error) {
