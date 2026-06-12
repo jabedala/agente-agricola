@@ -142,10 +142,10 @@ export default async function handler(req, res) {
     const esEncargado = empleadoActual[0]?.Tipo === 'M';
 
     if (intencion === 'TRABAJO') {
-      const [personas] = await connection.execute('SELECT id, Nombre FROM ParaAgentePersonas WHERE Sector=1');
-      const [parcelas] = await connection.execute('SELECT id, Nombre FROM ParaAgenteParcelas WHERE Sector=1');
+      const [personas] = await connection.execute('SELECT * FROM ParaAgentePersonas WHERE Sector=1');
+      const [parcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
       const [promedios] = await connection.execute('SELECT * FROM ParaAgentePromedios WHERE Sector=1');
-      const [trabajos] = await connection.execute('SELECT id, Nombre FROM ParaAgenteTrabajos');
+      const [trabajos] = await connection.execute('SELECT * FROM ParaAgenteTrabajos');
       
       contextoDB = `EMPLEADOS DEL SECTOR: ${JSON.stringify(personas)}\nPARCELAS: ${JSON.stringify(parcelas)}\nTRABAJOS DISPONIBLES: ${JSON.stringify(trabajos)}\nPROMEDIOS ESPERADOS: ${JSON.stringify(promedios)}`;
       reglasNegocio = `Tu objetivo es registrar labores agrícolas. El usuario actual es ${empleadoActual[0]?.Nombre}. PERMISOS: ${esEncargado ? 'Es ENCARGADO (M), puede registrar para cualquiera.' : 'Es OPERARIO, SOLO puede registrar para sí mismo.'} Cuando todos los datos estén claros (quién, dónde, qué trabajo y cantidad), genera un bloque JSON al final con el formato exacto: [[REGISTRO_TRABAJO:{"id_persona":X,"id_parcela":Y,"id_trabajo":Z,"cantidad":N}]]`;
@@ -155,7 +155,7 @@ export default async function handler(req, res) {
       reglasNegocio = `Registra marcas de entrada o salida. Pregunta si falta definir el tipo. Al finalizar genera: [[REGISTRO_ASISTENCIA:{"id_persona":${idEmpleado},"tipo":"ENTRADA" o "SALIDA"}]]`;
 
     } else if (intencion === 'MONITOREO') {
-      const [parcelas] = await connection.execute('SELECT id, Nombre FROM ParaAgenteParcelas WHERE Sector=1');
+      const [parcelas] = await connection.execute('SELECT * FROM ParaAgenteParcelas WHERE Sector=1');
       contextoDB = `PARCELAS: ${JSON.stringify(parcelas)}`;
       reglasNegocio = `Ayuda a registrar evaluaciones de plagas o cultivos. Al finalizar genera: [[REGISTRO_MONITOREO:{"id_parcela":X,"detalle":"..."}]]`;
 
