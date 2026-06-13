@@ -1,9 +1,11 @@
 import mysql from 'mysql2/promise';
 
+
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
-  const { mensaje, idEmpleado, action, username, password } = req.body;
+  const { mensaje, idEmpleado, action, username, password, history } = req.body;
 
   try {
     const connection = await mysql.createConnection({
